@@ -44,9 +44,7 @@ contract Exchange is ERC20Burnable {
     function getContractTokenBalance() public view returns (uint256) {
         return IERC20(SeleTokenAddress).balanceOf(address(this));
     }
-    /**
-     * @dev Adds liquidity to the exchange.
-     */
+ 
 
     function getRequiredLiquidity(uint256 ethamount) private view returns (uint256) {
         uint256 ethReserve = getEthBalance() - ethamount;
@@ -58,8 +56,10 @@ contract Exchange is ERC20Burnable {
     function getEthBalance() public view returns (uint256) {
         return address(this).balance;
     }
-
-    function provideLiquidity(uint256 amount) external payable returns (uint256) {
+   /**
+     * @dev Adds liquidity to the exchange.
+     */
+    function provideLiquidity(uint256 amount) public payable returns (uint256) {
         uint256 liquidityPool;
         if (getContractTokenBalance() == 0) {
             IERC20(SeleTokenAddress).transferFrom(msg.sender, address(this), amount);
@@ -72,60 +72,56 @@ contract Exchange is ERC20Burnable {
         }
         IERC20(SeleTokenAddress).transferFrom(msg.sender, address(this), amount);
         liquidityPool = (totalSupply() * msg.value) / (getEthBalance() - msg.value);
-         _mint(msg.sender, liquidityPool);
-        return liquidityPool;
+        _mint(msg.sender, liquidityPool);
+        return 10;
     }
-    function removeLiquidity (uint256 amount) public returns(uint256 ethValue, uint256 tokenValue){
-    if (amount <= 0) {
-        revert Exchange__AmountShouldBeGreaterThanZero();
+
+    function removeLiquidity(uint256 amount) public returns (uint256 ethValue, uint256 tokenValue) {
+        if (amount <= 0) {
+            revert Exchange__AmountShouldBeGreaterThanZero();
+        }
+        ethValue = (address(this).balance * amount) / totalSupply();
+        tokenValue = (getContractTokenBalance() * amount) / totalSupply();
+        _burn(msg.sender, amount);
+        payable(msg.sender).transfer(ethValue);
+        IERC20(SeleTokenAddress).transfer(msg.sender, tokenValue);
     }
-     ethValue = (address(this).balance * amount)/ totalSupply();
-     tokenValue = (getContractTokenBalance() * amount)/ totalSupply();
-     _burn(msg.sender, amount);
-      payable(msg.sender).transfer(ethValue);
-      IERC20(SeleTokenAddress).transfer(msg.sender, tokenValue);
+    /**
+     * @dev Returns the amount Eth to SeleTokes or vice versa that would be returned to the user
+     * in the swap
+     */
+
+    function getTokenSwapAmount(uint256 amountToSwap, uint256 inputReserve, uint256 outputReserve)
+        private
+        pure
+        returns (uint256)
+    {
+        uint256 outputAmount = (outputReserve * amountToSwap) / (inputReserve + amountToSwap);
+        return outputAmount;
     }
-        /** 
-    * @dev Returns the amount Eth to SeleTokes or vice versa that would be returned to the user
-    * in the swap
-    */
-   function getTokenSwapAmount(uint256 amountToSwap,uint256 inputReserve, uint256 outputReserve) private pure returns (uint256) {
-     uint256 outputAmount = (outputReserve * amountToSwap) / (inputReserve + amountToSwap);
-     return outputAmount;
-   }
-   
-    /** 
-    * @dev Swaps Eth to  SeleTokens Tokens
-    */
-   function SwapEthForSTKN(uint256 minTokenAmount) external payable{
-     uint256 tokenReserve = getContractTokenBalance();
-     uint256 tokenSwapAmount = getTokenSwapAmount(
-            msg.value,
-            address(this).balance - msg.value,
-            tokenReserve
-        );
+
+    /**
+     * @dev Swaps Eth to  SeleTokens Tokens
+     */
+    function SwapEthForSTKN(uint256 minTokenAmount) external payable {
+        uint256 tokenReserve = getContractTokenBalance();
+        uint256 tokenSwapAmount = getTokenSwapAmount(msg.value, address(this).balance - msg.value, tokenReserve);
         if (tokenSwapAmount < minTokenAmount) {
-         revert Exchange__AmountIsLessThanMinimumAmount();   
+            revert Exchange__AmountIsLessThanMinimumAmount();
         }
         IERC20(SeleTokenAddress).transfer(msg.sender, tokenSwapAmount);
-   }
-    /** 
-    * @dev Swaps SeleTokens Tokens for Eth
-    */
-   function SwapSeleTokenForEth(uint256 tokenSold, uint256 minEthAmount) external payable {
-      uint256 contractTokenBalance= getContractTokenBalance();
-      uint256 ethTradeAmount = getTokenSwapAmount(
-            tokenSold,
-            contractTokenBalance,
-            address(this).balance
-        );
-        if (ethTradeAmount<=minEthAmount) {
+    }
+    /**
+     * @dev Swaps SeleTokens Tokens for Eth
+     */
+
+    function SwapSeleTokenForEth(uint256 tokenSold, uint256 minEthAmount) external payable {
+        uint256 contractTokenBalance = getContractTokenBalance();
+        uint256 ethTradeAmount = getTokenSwapAmount(tokenSold, contractTokenBalance, address(this).balance);
+        if (ethTradeAmount <= minEthAmount) {
             revert Exchange__InsufficientReturnReserve();
         }
-        IERC20(SeleTokenAddress).transferFrom(msg.sender,
-            address(this),
-            tokenSold
-        );
+        IERC20(SeleTokenAddress).transferFrom(msg.sender, address(this), tokenSold);
         payable(msg.sender).transfer(ethTradeAmount);
-   }
+    }
 }
